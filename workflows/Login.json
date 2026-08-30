@@ -1,0 +1,470 @@
+{
+  "name": "Login",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "caresync/login",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e92fca15-598f-477d-bd65-b00119cd6250",
+      "name": "POST /caresync/login",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        96
+      ],
+      "webhookId": "bc990e10-803c-48f7-9abf-49bcad0c0a79"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || {};\nconst email = (body.email || '').trim().toLowerCase();\nconst password = body.password || '';\n\nif (!email || !password) {\n  return [{ json: { valid: false, code: 'INVALID_INPUT', message: 'Email and password are required.' } }];\n}\n\nconst emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\nif (!emailRegex.test(email)) {\n  return [{ json: { valid: false, code: 'INVALID_INPUT', message: 'A valid email address is required.' } }];\n}\n\nreturn [{ json: { valid: true, email, password } }];"
+      },
+      "id": "446d6e8a-ef61-49d8-a827-750e6b25e278",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "valid-check",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7b9a9a40-5a40-43b4-8336-914256fa2f7b",
+      "name": "Is Valid Input?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "ccNZu1pvJRf2yZav"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "email",
+              "keyValue": "={{ $json.email }}"
+            }
+          ]
+        },
+        "limit": 1
+      },
+      "id": "ed5ec5f8-f0c7-45de-8ce0-3dfd1393aa0b",
+      "name": "Lookup User",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        448,
+        384
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "found-check",
+              "leftValue": "={{ !!$json.email }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "9d6a6c99-0e8a-461b-834b-f6ea72653817",
+      "name": "User Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        672,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "active-check",
+              "leftValue": "={{ $json.is_active }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "6adf34c9-8a65-4ea5-92c5-8c6e88bd7ed2",
+      "name": "Is Account Active?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        896,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nconst userRow = $('Lookup User').first().json;\nconst inputPassword = $('Validate Input').first().json.password;\n\nconst storedHash = userRow.password_hash || '';\nconst [salt, hash] = storedHash.split(':');\n\nlet passwordMatch = false;\nif (salt && hash) {\n  const derived = crypto.pbkdf2Sync(inputPassword, salt, 10000, 64, 'sha512').toString('hex');\n  passwordMatch = derived === hash;\n}\n\nif (!passwordMatch) {\n  return [{ json: { valid: false } }];\n}\n\n// Generate a session token\nconst rawToken = crypto.randomBytes(32).toString('hex');\nconst tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');\nconst now = new Date().toISOString();\nconst expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours\n\nreturn [{\n  json: {\n    valid: true,\n    rawToken,\n    tokenHash,\n    now,\n    expiresAt,\n    email: userRow.email,\n    full_name: userRow.full_name,\n    role: userRow.role,\n    user_ref: userRow.user_ref,\n  }\n}];"
+      },
+      "id": "7bcd4c56-cffc-4a02-be27-bfb648a73978",
+      "name": "Verify Password & Generate Token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "pw-check",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "021cdad7-8bd8-489e-b6dc-31316103f32b",
+      "name": "Password Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        896,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "dataTableId": "={{ \"3eyVwkLdm0ef1bs3\" }}",
+        "options": {}
+      },
+      "id": "ad0129c1-5494-4585-b12b-036262d277e4",
+      "name": "Save Session to caresync_sessions",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": "={{ \"ccNZu1pvJRf2yZav\" }}",
+        "filters": {
+          "conditions": [
+            {}
+          ]
+        },
+        "options": {}
+      },
+      "id": "536a0d81-acb5-426c-b929-5a659a3676dd",
+      "name": "Update Last Login",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        864
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, message: \"Login successful.\", token: $(\"Verify Password & Generate Token\").first().json.rawToken, user: { id: $(\"Verify Password & Generate Token\").first().json.user_ref, name: $(\"Verify Password & Generate Token\").first().json.full_name, email: $(\"Verify Password & Generate Token\").first().json.email, role: $(\"Verify Password & Generate Token\").first().json.role } }) }}",
+        "options": {}
+      },
+      "id": "69fa6642-3066-4494-85c2-7c72798dbac3",
+      "name": "Respond 200 Login Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1344,
+        864
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"success\":false,\"message\":\"Invalid email or password.\",\"code\":\"INVALID_CREDENTIALS\"}",
+        "options": {}
+      },
+      "id": "f8cdd763-80c9-40e9-be1f-501f93273ed3",
+      "name": "Respond 401 Wrong Password",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"success\":false,\"message\":\"This account has been disabled. Please contact support.\",\"code\":\"ACCOUNT_DISABLED\"}",
+        "options": {}
+      },
+      "id": "84cbf2bc-a031-403f-9540-5ae81d3524fb",
+      "name": "Respond 401 Account Disabled",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        896,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"success\":false,\"message\":\"Invalid email or password.\",\"code\":\"INVALID_CREDENTIALS\"}",
+        "options": {}
+      },
+      "id": "389bbf1d-7060-452e-9d32-f383817d9536",
+      "name": "Respond 401 Invalid Credentials",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        896,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, message: $json.message, code: $json.code }) }}",
+        "options": {}
+      },
+      "id": "f9f1cc7e-3c91-4961-97cf-5fd81fa98c06",
+      "name": "Respond 400 Validation Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        0
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "POST /caresync/login": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Is Valid Input?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid Input?": {
+      "main": [
+        [
+          {
+            "node": "Lookup User",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 400 Validation Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup User": {
+      "main": [
+        [
+          {
+            "node": "User Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "User Found?": {
+      "main": [
+        [
+          {
+            "node": "Is Account Active?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 401 Invalid Credentials",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Account Active?": {
+      "main": [
+        [
+          {
+            "node": "Verify Password & Generate Token",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 401 Account Disabled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Password & Generate Token": {
+      "main": [
+        [
+          {
+            "node": "Password Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Password Valid?": {
+      "main": [
+        [
+          {
+            "node": "Save Session to caresync_sessions",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 401 Wrong Password",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Session to caresync_sessions": {
+      "main": [
+        [
+          {
+            "node": "Update Last Login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Last Login": {
+      "main": [
+        [
+          {
+            "node": "Respond 200 Login Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "c7fbd6e2-e1fe-4ea6-b4c6-51db6b012d00",
+  "meta": {
+    "instanceId": "42a7fcd57c398c04b71866dbab1f978294a4d56b835b2117a0acf453cc269a83"
+  },
+  "nodeGroups": [],
+  "id": "sX1vUgi571KeHr9d",
+  "tags": []
+}

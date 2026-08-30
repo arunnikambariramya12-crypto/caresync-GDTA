@@ -1,0 +1,381 @@
+{
+  "name": "Save Approved Prescription",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "caresync/save-prescription",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "c67eddfa-fd3f-4dee-b162-c6d15758c41c",
+      "name": "Receive Approved Medications",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        192
+      ],
+      "webhookId": "a8938e44-83d1-4328-ae27-18ce2e6c3661"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst item = $input.all()[0];\nconst body = item.json.body || {};\nconst headers = item.json.headers || {};\n\nconst rawAuth = headers.authorization || headers.Authorization || '';\nconst token = body.token || rawAuth.replace('Bearer ', '') || rawAuth || '';\n// Accept patientId OR email as the patient identifier\nconst patientId = body.patientId || body.email || body.userId || body.patient_id || '';\nconst prescriptionId = body.prescriptionId || body.prescription_id || '';\nconst medications = body.medications || [];\n\nif (!token || token.trim().length < 8) {\n  return [{ json: { requestValid: false, error: 'Authentication required.', code: 'UNAUTHORIZED', httpStatus: 401 } }];\n}\nif (!patientId || patientId.trim().length === 0) {\n  return [{ json: { requestValid: false, error: 'Patient ID or email is required.', code: 'MISSING_PATIENT_ID', httpStatus: 400 } }];\n}\nif (!Array.isArray(medications) || medications.length === 0) {\n  return [{ json: { requestValid: false, error: 'No medications provided.', code: 'MISSING_MEDICATIONS', httpStatus: 400 } }];\n}\n\nconst now = new Date().toISOString();\nconst results = [];\n\nfor (let i = 0; i < medications.length; i++) {\n  const med = medications[i];\n  if (!med || typeof med !== 'object') continue;\n  const name = med.medicineName || med.name || med.medicine_name || med.medication_name || '';\n  if (!name || name.trim().length === 0) {\n    return [{ json: { requestValid: false, error: 'Medicine name missing at index ' + i, code: 'INVALID_MEDICATION_DATA', httpStatus: 400 } }];\n  }\n\n  // Accept scheduledTimes (array), scheduledTime, or time (string from frontend)\n  const rawTimes = med.scheduledTimes || med.scheduledTime || med.time || [];\n  const timesArr = Array.isArray(rawTimes) ? rawTimes : (rawTimes ? [rawTimes] : []);\n\n  // Build duration from startDate/endDate if duration not provided\n  let duration = med.duration || '';\n  if (!duration && med.startDate && med.endDate) {\n    const start = new Date(med.startDate);\n    const end = new Date(med.endDate);\n    const days = Math.round((end - start) / (1000 * 60 * 60 * 24));\n    if (days > 0) duration = days + ' Days';\n  }\n\n  results.push({ json: {\n    requestValid: true,\n    medicine_name: name.trim(),\n    dosage: med.dosage || '',\n    dosage_unit: med.dosageUnit || med.dosage_unit || '',\n    form: med.form || '',\n    frequency: med.frequency || '',\n    scheduled_times: timesArr.filter(Boolean).join(', '),\n    duration: duration,\n    food_instruction: med.foodInstruction || med.food_instruction || '',\n    instructions: med.instructions || '',\n    route: med.route || '',\n    patient_ref: patientId.trim(),\n    prescription_id: prescriptionId || '',\n    status: 'active',\n    saved_at: now,\n    source: 'prescription_scan',\n  }});\n}\n\nif (results.length === 0) {\n  return [{ json: { requestValid: false, error: 'No valid medications after validation.', code: 'INVALID_MEDICATION_DATA', httpStatus: 400 } }];\n}\n\nreturn results;\n"
+      },
+      "id": "57ba5709-33fb-4b5a-a156-8ea738f64c32",
+      "name": "Validate Save Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "valid-check",
+              "leftValue": "={{ $json.requestValid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4d1ded7f-3e29-483b-a781-f5bbc3f83f82",
+      "name": "Save Request Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "caresync_medications"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "medicine_name": "={{ $json.medicine_name }}",
+            "dosage": "={{ $json.dosage }}",
+            "dosage_unit": "={{ $json.dosage_unit }}",
+            "form": "={{ $json.form }}",
+            "frequency": "={{ $json.frequency }}",
+            "scheduled_times": "={{ $json.scheduled_times }}",
+            "duration": "={{ $json.duration }}",
+            "food_instruction": "={{ $json.food_instruction }}",
+            "instructions": "={{ $json.instructions }}",
+            "route": "={{ $json.route }}",
+            "patient_ref": "={{ $json.patient_ref }}",
+            "prescription_id": "={{ $json.prescription_id }}",
+            "status": "={{ $json.status }}",
+            "saved_at": "={{ $json.saved_at }}",
+            "source": "={{ $json.source }}"
+          },
+          "schema": [
+            {
+              "id": "medicine_name",
+              "displayName": "medicine_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "dosage",
+              "displayName": "dosage",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "dosage_unit",
+              "displayName": "dosage_unit",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "form",
+              "displayName": "form",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "frequency",
+              "displayName": "frequency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "scheduled_times",
+              "displayName": "scheduled_times",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "duration",
+              "displayName": "duration",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "food_instruction",
+              "displayName": "food_instruction",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "instructions",
+              "displayName": "instructions",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "route",
+              "displayName": "route",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "patient_ref",
+              "displayName": "patient_ref",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "prescription_id",
+              "displayName": "prescription_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "saved_at",
+              "displayName": "saved_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6f42a64c-a281-43a6-8ca6-8add621f4427",
+      "name": "Insert Medication Row",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": {
+          "success": true,
+          "message": "Medications saved successfully.",
+          "status": "approved"
+        },
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "4f4e6245-388d-429f-8c84-af7ab49cc88c",
+      "name": "Respond Save Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1152,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, message: $json.error, code: $json.code } }}",
+        "options": {
+          "responseCode": "={{ $json.httpStatus || 400 }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "b19fee5d-f2d0-4fb7-924e-0c63e671cdfb",
+      "name": "Respond Save Validation Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        672,
+        288
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Receive Approved Medications": {
+      "main": [
+        [
+          {
+            "node": "Validate Save Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Save Request": {
+      "main": [
+        [
+          {
+            "node": "Save Request Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Request Valid?": {
+      "main": [
+        [
+          {
+            "node": "Insert Medication Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Save Validation Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Medication Row": {
+      "main": [
+        [
+          {
+            "node": "Respond Save Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "6d5d2689-321e-4079-a483-c1149a7713d4",
+  "meta": {
+    "instanceId": "42a7fcd57c398c04b71866dbab1f978294a4d56b835b2117a0acf453cc269a83"
+  },
+  "nodeGroups": [
+    {
+      "id": "fd223b6d-a152-40e4-b915-0922f7a5c43d",
+      "name": "Validation",
+      "nodeIds": [
+        "57ba5709-33fb-4b5a-a156-8ea738f64c32",
+        "4d1ded7f-3e29-483b-a781-f5bbc3f83f82"
+      ],
+      "description": "Validates auth and medication data, expands to one item per medication."
+    },
+    {
+      "id": "e880433e-ee66-4b89-83d4-2068827712a5",
+      "name": "Save to Database",
+      "nodeIds": [
+        "6f42a64c-a281-43a6-8ca6-8add621f4427"
+      ],
+      "description": "Inserts each medication row into the caresync_medications table."
+    }
+  ],
+  "id": "rYwkofI9rJRnkpBV",
+  "tags": []
+}

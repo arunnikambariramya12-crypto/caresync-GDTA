@@ -1,0 +1,285 @@
+{
+  "name": "Verify Session",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "caresync/verify-session",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "0c08fbc2-0467-42eb-8cf0-64286ec1852b",
+      "name": "POST /caresync/verify-session",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        96
+      ],
+      "webhookId": "00870d6b-ec6e-4914-a022-83018a18d9f2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst body = $input.first().json.body || {};\nconst rawToken = (body.token || '').trim();\n\nif (!rawToken) {\n  return [{ json: { valid: false, code: 'INVALID_INPUT', message: 'Token is required.' } }];\n}\n\nconst tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');\nreturn [{ json: { valid: true, tokenHash } }];"
+      },
+      "id": "75bfc198-2c16-46bb-9d1f-328bc90cda19",
+      "name": "Validate & Hash Token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "token-present",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f1c89e93-b95d-43c2-9aef-4688a9f806c9",
+      "name": "Is Token Present?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "session-ok",
+              "leftValue": "={{ $json.sessionOk }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d397f1f4-b5ff-4370-88cf-e50ade293fc5",
+      "name": "Is Session Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        896,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "user-active",
+              "leftValue": "={{ $json.is_active }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1e615a35-bb73-4219-bb17-e59e5724c6ec",
+      "name": "Is User Active?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, authenticated: true, user: { id: $json.user_ref, name: $json.full_name, email: $json.email, role: $json.role } }) }}",
+        "options": {}
+      },
+      "id": "8f3abeab-f337-4c90-87ae-9a803ce16c71",
+      "name": "Respond 200 Authenticated",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1344,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"success\":false,\"authenticated\":false,\"message\":\"Account disabled.\",\"code\":\"ACCOUNT_DISABLED\"}",
+        "options": {}
+      },
+      "id": "b100c786-4ef6-4999-a31b-31cf9b49b5f4",
+      "name": "Respond 401 Account Disabled",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1344,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"success\":false,\"authenticated\":false,\"message\":\"Session expired. Please login again.\",\"code\":\"SESSION_EXPIRED\"}",
+        "options": {}
+      },
+      "id": "b25b4656-6c22-4084-86d5-f2abe0fc3c2b",
+      "name": "Respond 401 Session Expired",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"success\":false,\"authenticated\":false,\"message\":\"Token is required.\",\"code\":\"INVALID_INPUT\"}",
+        "options": {}
+      },
+      "id": "2bd46e9e-1526-40cb-86eb-d68f7f4f5cc1",
+      "name": "Respond 400 Token Required",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        0
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "POST /caresync/verify-session": {
+      "main": [
+        [
+          {
+            "node": "Validate & Hash Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Hash Token": {
+      "main": [
+        [
+          {
+            "node": "Is Token Present?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Token Present?": {
+      "main": [
+        [
+          {
+            "node": "Is Session Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 400 Token Required",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Session Valid?": {
+      "main": [
+        [
+          {
+            "node": "Is User Active?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 401 Session Expired",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is User Active?": {
+      "main": [
+        [
+          {
+            "node": "Respond 200 Authenticated",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 401 Account Disabled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "bfa77487-cd0c-4827-bf0b-c48254ba739f",
+  "meta": {
+    "instanceId": "42a7fcd57c398c04b71866dbab1f978294a4d56b835b2117a0acf453cc269a83"
+  },
+  "nodeGroups": [],
+  "id": "xGzuib7UMB5K1GyA",
+  "tags": []
+}

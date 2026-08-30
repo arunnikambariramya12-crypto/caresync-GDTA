@@ -1,0 +1,268 @@
+{
+  "name": "Signup",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "caresync/signup",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "742479f0-84ae-4abe-a2e0-adb82067a2e9",
+      "name": "POST /caresync/signup",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        96
+      ],
+      "webhookId": "70e97e05-2bbe-4ed9-afc5-24b109fa2bc6"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || {};\nconst fullName = (body.fullName || '').trim();\nconst email = (body.email || '').trim().toLowerCase();\nconst phone = (body.phone || '').trim();\nconst password = body.password || '';\nconst role = (body.role || '').trim().toLowerCase();\n\nif (!fullName) {\n  return [{ json: { valid: false, code: 'INVALID_INPUT', message: 'Full name is required.' } }];\n}\n\nconst emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\nif (!email || !emailRegex.test(email)) {\n  return [{ json: { valid: false, code: 'INVALID_INPUT', message: 'A valid email address is required.' } }];\n}\n\nconst phoneRegex = /^\\+?[\\d\\s\\-()]{7,20}$/;\nif (!phone || !phoneRegex.test(phone)) {\n  return [{ json: { valid: false, code: 'INVALID_INPUT', message: 'A valid phone number is required.' } }];\n}\n\nif (!password) {\n  return [{ json: { valid: false, code: 'INVALID_INPUT', message: 'Password is required.' } }];\n}\n\nif (!['patient', 'caregiver'].includes(role)) {\n  return [{ json: { valid: false, code: 'INVALID_INPUT', message: 'Role must be patient or caregiver.' } }];\n}\n\nreturn [{ json: { valid: true, fullName, email, phone, password, role } }];"
+      },
+      "id": "0f8b4eb6-7cd3-4cde-884b-f02336cce8f8",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "valid-check",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "39d7fe73-36ab-42ae-b69e-ff41bb89f890",
+      "name": "Is Valid Input?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "email-taken",
+              "leftValue": "={{ !!$json.email }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "aee9adb2-f317-4e2d-a8fc-2ccda1f0b50e",
+      "name": "Email Already Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        672,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"success\":false,\"message\":\"An account with this email already exists.\",\"code\":\"EMAIL_EXISTS\"}",
+        "options": {}
+      },
+      "id": "5f20e41b-7400-4081-88f7-457e83bbc1b8",
+      "name": "Respond 409 Email Exists",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        896,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst validateNode = $('Validate Input').first().json;\n\nconst password = validateNode.password;\nconst role = validateNode.role;\nconst fullName = validateNode.fullName;\nconst email = validateNode.email;\nconst phone = validateNode.phone;\n\nconst salt = crypto.randomBytes(16).toString('hex');\nconst hash = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');\nconst passwordHash = salt + ':' + hash;\n\nconst timestamp = Date.now();\nconst randomSuffix = crypto.randomBytes(4).toString('hex');\nconst userRef = role + '_' + timestamp + '_' + randomSuffix;\n\nconst now = new Date().toISOString();\n\nreturn [{\n  json: {\n    full_name: fullName,\n    email: email,\n    phone: phone,\n    password_hash: passwordHash,\n    role: role,\n    user_ref: userRef,\n    is_active: true,\n    last_login: '',\n    pin_hash: '',\n    created_date: now,\n    updated_date: now,\n  }\n}];"
+      },
+      "id": "e57aaf32-1987-4098-83d1-ca312ced2eed",
+      "name": "Hash Password & Generate User Ref",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "dataTableId": "={{ \"ccNZu1pvJRf2yZav\" }}",
+        "options": {}
+      },
+      "id": "f6080e4f-5e20-4a30-a611-e2f8443b346a",
+      "name": "Save User to caresync_users",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        896,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, message: \"Account created successfully.\", user: { id: $(\"Hash Password & Generate User Ref\").first().json.user_ref, name: $(\"Hash Password & Generate User Ref\").first().json.full_name, email: $(\"Hash Password & Generate User Ref\").first().json.email, role: $(\"Hash Password & Generate User Ref\").first().json.role } }) }}",
+        "options": {}
+      },
+      "id": "8437199c-529b-4067-8c76-8d1f97dccebe",
+      "name": "Respond 201 Account Created",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, message: $json.message, code: $json.code }) }}",
+        "options": {}
+      },
+      "id": "3dbaf836-14e1-4a55-90d9-0f49043fbe7a",
+      "name": "Respond 400 Validation Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        0
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "POST /caresync/signup": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Is Valid Input?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid Input?": {
+      "main": [
+        [
+          {
+            "node": "Email Already Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 400 Validation Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Already Exists?": {
+      "main": [
+        [
+          {
+            "node": "Respond 409 Email Exists",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Hash Password & Generate User Ref",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hash Password & Generate User Ref": {
+      "main": [
+        [
+          {
+            "node": "Save User to caresync_users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save User to caresync_users": {
+      "main": [
+        [
+          {
+            "node": "Respond 201 Account Created",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "8e728e03-a58d-4b91-a7dd-75b40a8c05ef",
+  "meta": {
+    "instanceId": "42a7fcd57c398c04b71866dbab1f978294a4d56b835b2117a0acf453cc269a83"
+  },
+  "nodeGroups": [],
+  "id": "wqBqJHlxmgzpBqZR",
+  "tags": []
+}

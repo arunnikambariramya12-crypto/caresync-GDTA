@@ -1,0 +1,558 @@
+{
+  "name": "AI Prescription Analyzer",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "caresync/analyze-prescription",
+        "responseMode": "responseNode",
+        "options": {
+          "binaryPropertyName": "data"
+        }
+      },
+      "id": "25dca3c4-a1fd-4cf8-898d-2350d6c14b78",
+      "name": "Receive Prescription Upload",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -400,
+        224
+      ],
+      "webhookId": "6d758111-c59c-4b9b-a4c0-ad7337dfb70d"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst item = $input.all()[0];\nconst body = item.json.body || {};\nconst headers = item.json.headers || {};\nconst binaryData = item.binary || {};\n\nconst rawAuth = headers.authorization || headers.Authorization || '';\nconst token = body.token || rawAuth.replace('Bearer ', '') || rawAuth || '';\nconst patientId = body.patientId || '';\n\nconst binaryKeys = Object.keys(binaryData);\nconst binaryKey = binaryKeys.length > 0 ? binaryKeys[0] : 'data';\n\nif (!token || token.trim().length < 8) {\n  return [{\n    json: {\n      authValid: false,\n      error: 'Authentication required.',\n      code: 'UNAUTHORIZED',\n    },\n  }];\n}\n\nconst userId = 'user_' + token.substring(0, 8).replace(/[^a-zA-Z0-9]/g, '');\nconst resolvedPatientId = patientId || userId;\n\nreturn [{\n  json: {\n    authValid: true,\n    userId: userId,\n    role: 'patient',\n    patientId: resolvedPatientId,\n    token: token,\n    binaryKey: binaryKey,\n  },\n  binary: item.binary,\n}];\n"
+      },
+      "id": "e8ed6200-c7a0-4d7e-b838-421ff465e3b3",
+      "name": "Validate Auth Token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -96,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "auth-check",
+              "leftValue": "={{ $json.authValid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3a98a829-0962-4ab1-9855-d6f1b9953ec2",
+      "name": "Auth Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        176,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst item = $input.all()[0];\nconst binaryData = item.binary || {};\n\nconst binaryKey = item.json.binaryKey || 'data';\nconst patientId = item.json.patientId || '';\nconst userId = item.json.userId || '';\nconst token = item.json.token || '';\n\nconst binaryFile = binaryData[binaryKey];\nif (!binaryFile) {\n  return [{\n    json: {\n      fileValid: false,\n      error: 'No prescription file was uploaded. Please upload a prescription image or PDF.',\n      code: 'NO_FILE_UPLOADED',\n      patientId,\n      userId,\n      token,\n      binaryKey,\n    },\n  }];\n}\n\nconst mimeType = (binaryFile.mimeType || 'application/octet-stream').toLowerCase();\nconst fileName = binaryFile.fileName || 'prescription';\nconst allowedTypes = [\n  'image/jpeg', 'image/jpg', 'image/png', 'image/gif',\n  'image/webp', 'image/bmp', 'application/pdf',\n];\n\nif (!allowedTypes.includes(mimeType)) {\n  return [{\n    json: {\n      fileValid: false,\n      error: 'Unsupported file type. Please upload a JPEG, PNG, or PDF prescription.',\n      code: 'INVALID_FILE_TYPE',\n      patientId,\n      userId,\n      token,\n      binaryKey,\n    },\n  }];\n}\n\nconst isPdf = mimeType === 'application/pdf';\n\nreturn [{\n  json: {\n    fileValid: true,\n    isPdf,\n    mimeType,\n    fileName,\n    patientId,\n    userId,\n    token,\n    binaryKey,\n  },\n  binary: item.binary,\n}];\n"
+      },
+      "id": "5d781843-88a0-4d6f-ab71-f0aa5aeb756c",
+      "name": "Validate File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "file-check",
+              "leftValue": "={{ $json.fileValid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "dddb4505-05c0-4719-914a-f3f943c4b4ca",
+      "name": "File Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        672,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "is-pdf",
+              "leftValue": "={{ $json.isPdf }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "65037bc3-c646-4527-b2c2-6dabb90e2a15",
+      "name": "Route by File Type",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        896,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "document",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-3.6-flash",
+          "mode": "id"
+        },
+        "text": "You are CareSync Prescription Analyzer.\n\nAnalyze the provided medical prescription and extract all medication information that is clearly visible.\n\nSTRICT RULES:\n1. Return ONLY valid JSON - no markdown code blocks, no explanations, no other text\n2. Use null for any value you cannot confidently read from the prescription\n3. Do NOT invent, guess, or infer values not written on the prescription\n4. Do NOT diagnose medical conditions or recommend additional medications\n5. Do NOT alter dosages or suggest stopping medication\n6. Include ALL medications listed on the prescription\n7. confidence must be 0.00 to 1.00 (1.00 = perfectly clear and readable)\n8. scheduledTimes must use 24-hour HH:MM format only (e.g. \"08:00\", \"14:00\", \"20:00\")\n9. For unclear handwriting, use null rather than guessing\n10. List duplicate medication entries separately if their instructions differ\n11. The \"instructions\" field must contain ONLY the dosing/timing directions written for the patient (e.g. \"1 Morning\", \"1 Night\", \"1 Morning 1 Night After Food\"). Do NOT include generic composition text, ingredient lists, or drug formulation details printed below or near the medicine name (e.g. \"DOXYLAMINE 10MG + PYRIDOXINE 10MG + FOLIC ACID 2.5MG\", \"CLARITHROMYCIN IP 500MG\", \"ISOXSUPRINE 10MG\") — those are composition labels, not patient instructions.\n\nReturn exactly this JSON structure (no deviations):\n{\n  \"prescription\": {\n    \"patientName\": null,\n    \"doctorName\": null,\n    \"prescriptionDate\": null,\n    \"notes\": null\n  },\n  \"medications\": [\n    {\n      \"medicineName\": \"string or null if completely unreadable\",\n      \"dosage\": \"string or null\",\n      \"dosageUnit\": \"string or null (e.g. mg, ml, mcg, IU)\",\n      \"form\": \"string or null (e.g. tablet, capsule, syrup, injection)\",\n      \"frequency\": \"string or null (e.g. once daily, twice daily, three times a day)\",\n      \"scheduledTimes\": [\"HH:MM format - empty array if no times specified on prescription\"],\n      \"duration\": \"string or null (e.g. 30 days, 2 weeks)\",\n      \"quantity\": \"string or null\",\n      \"route\": \"string or null (e.g. oral, topical, inhalation)\",\n      \"foodInstruction\": \"string or null (e.g. after food, before food, with food)\",\n      \"instructions\": \"string or null - dosing/timing directions ONLY, no composition text\",\n      \"confidence\": 0.00,\n      \"uncertainFields\": [\"list field names that were unclear or unreadable\"]\n    }\n  ]\n}",
+        "inputType": "binary",
+        "binaryPropertyName": "={{ $json.binaryKey || \"data\" }}",
+        "options": {
+          "maxOutputTokens": 8192
+        }
+      },
+      "id": "73498318-6abd-41c0-a147-226679f14760",
+      "name": "Analyze Prescription PDF",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1120,
+        0
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "VbBHYPh5r4Rkycs3",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst item = $input.all()[0];\n\n// Gemini returns the text at content.parts[0].text, NOT at a top-level \"text\" field\nconst parts = (item.json.content && item.json.content.parts) ? item.json.content.parts : [];\nconst rawText = (parts.length > 0 ? parts[0].text : (item.json.text || '')).trim();\n\n// Strip markdown code fences that Gemini sometimes wraps JSON in\nlet jsonText = rawText;\nif (jsonText.indexOf('```json') === 0) {\n  jsonText = jsonText.slice(7);\n  const endIdx = jsonText.lastIndexOf('```');\n  if (endIdx > -1) jsonText = jsonText.slice(0, endIdx);\n} else if (jsonText.indexOf('```') === 0) {\n  jsonText = jsonText.slice(3);\n  const endIdx = jsonText.lastIndexOf('```');\n  if (endIdx > -1) jsonText = jsonText.slice(0, endIdx);\n}\njsonText = jsonText.trim();\n\nif (!jsonText) {\n  return [{\n    json: {\n      parseSuccess: false,\n      status: 'failed',\n      error: 'AI returned an empty response. Please try again.',\n      code: 'PRESCRIPTION_ANALYSIS_FAILED',\n    },\n  }];\n}\n\nlet parsed;\ntry {\n  parsed = JSON.parse(jsonText);\n} catch (e) {\n  return [{\n    json: {\n      parseSuccess: false,\n      status: 'failed',\n      error: 'We could not read this prescription clearly. Please upload a clearer image.',\n      code: 'PRESCRIPTION_ANALYSIS_FAILED',\n    },\n  }];\n}\n\nif (!parsed || typeof parsed !== 'object') {\n  return [{\n    json: {\n      parseSuccess: false,\n      status: 'failed',\n      error: 'Invalid AI response format.',\n      code: 'PRESCRIPTION_ANALYSIS_FAILED',\n    },\n  }];\n}\n\nif (!parsed.medications || !Array.isArray(parsed.medications)) {\n  return [{\n    json: {\n      parseSuccess: false,\n      status: 'failed',\n      error: 'No medications structure found in prescription analysis.',\n      code: 'PRESCRIPTION_ANALYSIS_FAILED',\n    },\n  }];\n}\n\nif (parsed.medications.length === 0) {\n  return [{\n    json: {\n      parseSuccess: false,\n      status: 'failed',\n      error: 'No medications were found in the prescription. Please upload a valid prescription.',\n      code: 'PRESCRIPTION_ANALYSIS_FAILED',\n    },\n  }];\n}\n\nconst hasValidMeds = parsed.medications.some(function(m) {\n  return m && typeof m === 'object' && ('medicineName' in m);\n});\nif (!hasValidMeds) {\n  return [{\n    json: {\n      parseSuccess: false,\n      status: 'failed',\n      error: 'Medications data is missing required fields.',\n      code: 'PRESCRIPTION_ANALYSIS_FAILED',\n    },\n  }];\n}\n\nreturn [{\n  json: {\n    parseSuccess: true,\n    prescription: parsed.prescription || {\n      patientName: null,\n      doctorName: null,\n      prescriptionDate: null,\n      notes: null,\n    },\n    medications: parsed.medications,\n  },\n}];\n"
+      },
+      "id": "c1c4a15d-87fe-4520-b8a5-62802ff03b59",
+      "name": "Parse AI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1408,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "parse-success",
+              "leftValue": "={{ $json.parseSuccess }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ba7ceeb7-8ee5-4327-9ea0-7f6c90f544d5",
+      "name": "Analysis Successful?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1696,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst CONFIDENCE_THRESHOLD = 0.80;\n\nconst item = $input.all()[0];\nconst medications = item.json.medications || [];\nconst prescriptionInfo = item.json.prescription || {};\n\n// Read patient context from the Validate File node upstream\nconst fileData = $('Validate File').item.json;\nconst patientId = fileData.patientId || 'unknown';\nconst userId = fileData.userId || 'unknown';\nconst fileName = fileData.fileName || 'prescription';\nconst mimeType = fileData.mimeType || 'image/jpeg';\n\nconst ts = Date.now().toString(36).toUpperCase();\nconst rand = Math.random().toString(36).slice(2, 8).toUpperCase();\nconst prescriptionId = 'rx_' + ts + '_' + rand;\n\n// Normalize time strings to 24-hour HH:MM format\nfunction normalizeTime(t) {\n  if (!t || typeof t !== 'string') return null;\n  const s = t.trim().toUpperCase();\n  const m12 = s.match(/^(\\d{1,2})(?::(\\d{2}))?\\s*(AM|PM)$/);\n  if (m12) {\n    let h = parseInt(m12[1], 10);\n    const m = parseInt(m12[2] || '0', 10);\n    if (m12[3] === 'PM' && h !== 12) h += 12;\n    if (m12[3] === 'AM' && h === 12) h = 0;\n    return (h < 10 ? '0' + h : '' + h) + ':' + (m < 10 ? '0' + m : '' + m);\n  }\n  const m24 = s.match(/^(\\d{1,2}):(\\d{2})$/);\n  if (m24) {\n    const h = parseInt(m24[1], 10);\n    const m = parseInt(m24[2], 10);\n    return (h < 10 ? '0' + h : '' + h) + ':' + (m < 10 ? '0' + m : '' + m);\n  }\n  return null;\n}\n\nfunction buildSimpleSummary(med) {\n  if (!med.medicineName) return 'Please review the prescription details.';\n  let summary = med.medicineName;\n  if (med.dosage && med.dosageUnit) {\n    summary += ' ' + med.dosage + ' ' + med.dosageUnit;\n  } else if (med.dosage) {\n    summary += ' ' + med.dosage;\n  }\n  if (med.frequency) summary += ' — ' + med.frequency;\n  if (med.foodInstruction) summary += ' ' + med.foodInstruction;\n  if (med.instructions) summary += '. ' + med.instructions;\n  return summary.endsWith('.') ? summary : summary + '.';\n}\n\nlet requiresAnyReview = false;\nlet totalConfidence = 0;\n\nconst normalizedMeds = medications.map(function(med) {\n  const rawTimes = Array.isArray(med.scheduledTimes) ? med.scheduledTimes : [];\n  const normalizedTimes = rawTimes.map(normalizeTime).filter(function(t) { return t !== null; });\n\n  const confidence = (typeof med.confidence === 'number' && med.confidence >= 0 && med.confidence <= 1)\n    ? med.confidence : 0;\n  totalConfidence += confidence;\n\n  const uncertainFields = Array.isArray(med.uncertainFields) ? med.uncertainFields : [];\n  const requiresReview = confidence < CONFIDENCE_THRESHOLD || uncertainFields.length > 0;\n\n  if (requiresReview) requiresAnyReview = true;\n\n  return {\n    medicineName: med.medicineName || null,\n    name: med.medicineName || null,\n    medicine_name: med.medicineName || null,\n    medication_name: med.medicineName || null,\n    dosage: med.dosage || null,\n    dosageUnit: med.dosageUnit || null,\n    form: med.form || null,\n    frequency: med.frequency || null,\n    scheduledTimes: normalizedTimes,\n    duration: med.duration || null,\n    quantity: med.quantity || null,\n    route: med.route || null,\n    foodInstruction: med.foodInstruction || null,\n    instructions: med.instructions || null,\n    confidence: confidence,\n    uncertainFields: uncertainFields,\n    requiresReview: requiresReview,\n    simpleSummary: buildSimpleSummary(med),\n    schedule: {\n      frequency: med.frequency || null,\n      times: normalizedTimes,\n      days: normalizedTimes.length > 0 ? ['every day'] : [],\n    },\n  };\n});\n\nconst avgConfidence = medications.length > 0\n  ? Math.round((totalConfidence / medications.length) * 100) / 100\n  : 0;\n\nconst overallStatus = requiresAnyReview ? 'requires_review' : 'analyzed';\nconst message = requiresAnyReview\n  ? 'Some prescription details could not be read clearly. Please review them.'\n  : 'Prescription analyzed successfully. Please review the extracted medicines.';\n\nconst now = new Date().toISOString();\n\nreturn [{\n  json: {\n    success: true,\n    prescriptionId: prescriptionId,\n    status: overallStatus,\n    message: message,\n    prescription: {\n      patientName: prescriptionInfo.patientName || null,\n      doctorName: prescriptionInfo.doctorName || null,\n      prescriptionDate: prescriptionInfo.prescriptionDate || null,\n      notes: prescriptionInfo.notes || null,\n    },\n    medications: normalizedMeds,\n    _prescriptionRecord: {\n      prescription_id: prescriptionId,\n      patient_id: patientId,\n      user_id: userId,\n      file_name: fileName,\n      file_type: mimeType,\n      uploaded_at: now,\n      doctor_name: prescriptionInfo.doctorName || null,\n      prescription_date: prescriptionInfo.prescriptionDate || null,\n      analysis_status: overallStatus,\n      analysis_confidence: avgConfidence,\n    },\n  },\n}];\n"
+      },
+      "id": "2e563b70-1476-4273-955d-0bc7ea53f57f",
+      "name": "Normalize and Build Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1968,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "641ff320-2f97-4418-9a09-36ebf9e181e4",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2192,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, status: \"failed\", message: $json.error || \"We could not read this prescription clearly. Please upload a clearer image.\", code: $json.code || \"PRESCRIPTION_ANALYSIS_FAILED\" } }}",
+        "options": {
+          "responseCode": 422,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "eb37e8de-e5bf-4086-ab4b-7a55c0253837",
+      "name": "Respond Analysis Failed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1968,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-3.6-flash",
+          "mode": "id"
+        },
+        "text": "You are CareSync Prescription Analyzer.\n\nAnalyze the provided medical prescription and extract all medication information that is clearly visible.\n\nSTRICT RULES:\n1. Return ONLY valid JSON - no markdown code blocks, no explanations, no other text\n2. Use null for any value you cannot confidently read from the prescription\n3. Do NOT invent, guess, or infer values not written on the prescription\n4. Do NOT diagnose medical conditions or recommend additional medications\n5. Do NOT alter dosages or suggest stopping medication\n6. Include ALL medications listed on the prescription\n7. confidence must be 0.00 to 1.00 (1.00 = perfectly clear and readable)\n8. scheduledTimes must use 24-hour HH:MM format only (e.g. \"08:00\", \"14:00\", \"20:00\")\n9. For unclear handwriting, use null rather than guessing\n10. List duplicate medication entries separately if their instructions differ\n11. The \"instructions\" field must contain ONLY the dosing/timing directions written for the patient (e.g. \"1 Morning\", \"1 Night\", \"1 Morning 1 Night After Food\"). Do NOT include generic composition text, ingredient lists, or drug formulation details printed below or near the medicine name (e.g. \"DOXYLAMINE 10MG + PYRIDOXINE 10MG + FOLIC ACID 2.5MG\", \"CLARITHROMYCIN IP 500MG\", \"ISOXSUPRINE 10MG\") — those are composition labels, not patient instructions.\n\nReturn exactly this JSON structure (no deviations):\n{\n  \"prescription\": {\n    \"patientName\": null,\n    \"doctorName\": null,\n    \"prescriptionDate\": null,\n    \"notes\": null\n  },\n  \"medications\": [\n    {\n      \"medicineName\": \"string or null if completely unreadable\",\n      \"dosage\": \"string or null\",\n      \"dosageUnit\": \"string or null (e.g. mg, ml, mcg, IU)\",\n      \"form\": \"string or null (e.g. tablet, capsule, syrup, injection)\",\n      \"frequency\": \"string or null (e.g. once daily, twice daily, three times a day)\",\n      \"scheduledTimes\": [\"HH:MM format - empty array if no times specified on prescription\"],\n      \"duration\": \"string or null (e.g. 30 days, 2 weeks)\",\n      \"quantity\": \"string or null\",\n      \"route\": \"string or null (e.g. oral, topical, inhalation)\",\n      \"foodInstruction\": \"string or null (e.g. after food, before food, with food)\",\n      \"instructions\": \"string or null - dosing/timing directions ONLY, no composition text\",\n      \"confidence\": 0.00,\n      \"uncertainFields\": [\"list field names that were unclear or unreadable\"]\n    }\n  ]\n}",
+        "inputType": "binary",
+        "binaryPropertyName": "={{ $json.binaryKey || \"data\" }}",
+        "options": {
+          "maxOutputTokens": 8192
+        }
+      },
+      "id": "92a49452-01c8-440d-82c9-af1a0ac8a8c6",
+      "name": "Analyze Prescription Image",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1120,
+        192
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "VbBHYPh5r4Rkycs3",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, message: $json.error || \"Unsupported prescription file type.\", code: $json.code || \"INVALID_FILE_TYPE\" } }}",
+        "options": {
+          "responseCode": 400,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "8ec3f118-87f9-4a94-8610-57f52b75eaf2",
+      "name": "Respond Invalid File",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        896,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": {
+          "success": false,
+          "message": "Authentication required.",
+          "code": "UNAUTHORIZED"
+        },
+        "options": {
+          "responseCode": 401,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "610dd507-cdae-48af-b6a2-7d1b9d071cdf",
+      "name": "Respond Unauthorized",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        432,
+        368
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Receive Prescription Upload": {
+      "main": [
+        [
+          {
+            "node": "Validate Auth Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Auth Token": {
+      "main": [
+        [
+          {
+            "node": "Auth Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auth Valid?": {
+      "main": [
+        [
+          {
+            "node": "Validate File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Unauthorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate File": {
+      "main": [
+        [
+          {
+            "node": "File Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "File Valid?": {
+      "main": [
+        [
+          {
+            "node": "Route by File Type",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Invalid File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by File Type": {
+      "main": [
+        [
+          {
+            "node": "Analyze Prescription PDF",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Analyze Prescription Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Prescription PDF": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Response": {
+      "main": [
+        [
+          {
+            "node": "Analysis Successful?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analysis Successful?": {
+      "main": [
+        [
+          {
+            "node": "Normalize and Build Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Analysis Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize and Build Response": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Prescription Image": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "283163c4-d6c3-40b4-9759-0fc5f3ef6391",
+  "meta": {
+    "instanceId": "42a7fcd57c398c04b71866dbab1f978294a4d56b835b2117a0acf453cc269a83"
+  },
+  "nodeGroups": [
+    {
+      "id": "f865de70-d289-40e0-882b-cff72b86a0fb",
+      "name": "File Validation",
+      "nodeIds": [
+        "5d781843-88a0-4d6f-ab71-f0aa5aeb756c",
+        "dddb4505-05c0-4719-914a-f3f943c4b4ca"
+      ],
+      "description": "Validates the uploaded file type and extracts file metadata."
+    },
+    {
+      "id": "384b3574-4683-4471-8d89-e7fd4a0c6f92",
+      "name": "AI Analysis",
+      "nodeIds": [
+        "65037bc3-c646-4527-b2c2-6dabb90e2a15",
+        "73498318-6abd-41c0-a147-226679f14760",
+        "92a49452-01c8-440d-82c9-af1a0ac8a8c6",
+        "c1c4a15d-87fe-4520-b8a5-62802ff03b59"
+      ],
+      "description": "Routes prescription to Gemini image or document analysis."
+    }
+  ],
+  "id": "tnjGnaZVhBrzbtdU",
+  "tags": []
+}

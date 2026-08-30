@@ -1,0 +1,201 @@
+{
+  "name": "Logout",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "caresync/logout",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "559a1412-33ad-4d19-90b6-a6d070ddf333",
+      "name": "POST /caresync/logout",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        192
+      ],
+      "webhookId": "023bb12d-9f0c-461c-bd7e-57b4b0c20381"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst body = $input.first().json.body || {};\nconst rawToken = (body.token || '').trim();\n\nif (!rawToken) {\n  return [{ json: { valid: false, code: 'INVALID_INPUT', message: 'Token is required.' } }];\n}\n\nconst tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');\nreturn [{ json: { valid: true, tokenHash } }];"
+      },
+      "id": "0b869949-cd01-432c-ac75-da274536918f",
+      "name": "Validate & Hash Token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "token-present",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f46317d4-dfe6-4939-bd8a-82e48b55dd06",
+      "name": "Is Token Present?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "3eyVwkLdm0ef1bs3"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "token_hash",
+              "keyValue": "={{ $json.tokenHash }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "is_valid": false
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "3c2c68a5-fcb2-470d-96cc-3b4b7292a64f",
+      "name": "Invalidate Session",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"success\":true,\"message\":\"Logged out successfully.\"}",
+        "options": {}
+      },
+      "id": "bdb6aba3-7235-4414-82e3-c3635aa8d7b6",
+      "name": "Respond 200 Logged Out",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"success\":false,\"message\":\"Token is required.\",\"code\":\"INVALID_INPUT\"}",
+        "options": {}
+      },
+      "id": "6b39a529-69f0-4e2f-a7bb-89ac1366a002",
+      "name": "Respond 400 Token Required",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        0
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "POST /caresync/logout": {
+      "main": [
+        [
+          {
+            "node": "Validate & Hash Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Hash Token": {
+      "main": [
+        [
+          {
+            "node": "Is Token Present?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Token Present?": {
+      "main": [
+        [
+          {
+            "node": "Invalidate Session",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 400 Token Required",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Invalidate Session": {
+      "main": [
+        [
+          {
+            "node": "Respond 200 Logged Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "33889ccd-7ec4-4cd2-8ced-240f5a94bee6",
+  "meta": {
+    "instanceId": "42a7fcd57c398c04b71866dbab1f978294a4d56b835b2117a0acf453cc269a83"
+  },
+  "nodeGroups": [],
+  "id": "PNfIFQXeiUqQG2E8",
+  "tags": []
+}
